@@ -1,0 +1,9 @@
+Flask==1.0.2
+tensorflow==1.13.1
+keras==2.2.4
+flask-cors
+pandas
+opencv-python-headless
+requests
+flask_cors
+Pillow
