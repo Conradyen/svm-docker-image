@@ -4,16 +4,17 @@ import json
 from io import BytesIO
 import numpy as np
 import requests
-from flask_cors import CORS
-import pickle
-import base64
-from io import BytesIO
-from PIL import Image
+# from flask_cors import CORS
+# import pickle
+# import base64
+# from io import BytesIO
+# from PIL import Image
 from svm import support_vector_machine
 from DataPreprocessor import DataPreprocessor
+from sklearn.model_selection import train_test_split
 
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
 # {name : model}
 model = {}
 
@@ -26,15 +27,27 @@ def build_model():
         path: path to model
     }
     '''
-    name = request.form['name']
-    if model[name] is None:
+    name = request.form["name"]
+    if name not in model.keys():
         _model = support_vector_machine()
-        model[name] = _model.load_model(request.form['path'])
+        model[name] = _model
 
     data = DataPreprocessor().getData()
-    X = data.drop(['count'], axis=1).to_numpy()
-    y = data['count'].to_numpy()
-    model[name].train(X, y)
+    train, test = train_test_split(data, test_size=0.2)
+    print(data.head())
+    Xtrain = train.drop(['count'], axis=1)
+    ytrain = train['count']
+
+    model[name].train(Xtrain, ytrain)
+    Xtest = test.drop(['count'], axis=1)
+    ytest = test['count']
+
+    score = model[name].score(Xtest, ytest)
+
+    payload = {"test R square": str(score),
+               "result": "success",
+               }
+    return jsonify(payload)
 
 
 @app.route("/svm/predict", methods=['POST'])
