@@ -10,6 +10,7 @@ import base64
 from io import BytesIO
 from PIL import Image
 from svm import support_vector_machine
+from DataPreprocessor import DataPreprocessor
 
 app = Flask(__name__)
 CORS(app)
@@ -19,34 +20,32 @@ model = {}
 
 @app.route("/svm/build_model", methods=['POST'])
 def build_model():
-
-    ```
+    '''
     request body{
         name: model name,
         path: path to model
     }
-    ```
-    if model[request.form['name']] is none:
+    '''
+    name = request.form['name']
+    if model[name] is None:
         _model = support_vector_machine()
         model[name] = _model.load_model(request.form['path'])
 
-
-@app.route('/svm/upload', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        f = request.files['the_file']
-        f.save('/var/www/uploads/uploaded_file.txt')
+    data = DataPreprocessor().getData()
+    X = data.drop(['count'], axis=1).to_numpy()
+    y = data['count'].to_numpy()
+    model[name].train(X, y)
 
 
 @app.route("/svm/predict", methods=['POST'])
 def predict():
-    ```
+    '''
     request body{
         name: model name,
         dataX: data X
     }
-    ```
-    if model[request.form['name']] is none:
+    '''
+    if model[request.form['name']] is None:
         ret = "model not exist"
     else:
         fitmodel = model[request.form['name']]
@@ -57,16 +56,6 @@ def predict():
                "result": ret,
                }
     return jsonify(payload)
-
-
-# @app.route("/svm/predict", methods=['POST'])
-# def train_model():
-
-
-# @app.route("/app")
-# def digit_reg():
-
-#     return render_template("paint_app.html")
 
 
 if __name__ == '__main__':

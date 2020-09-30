@@ -40,7 +40,7 @@ class DataGen:
             employee_dict[id] = [random.choice(
                 self.genderTypeChoice), random.choice(self.raceTypeChoice), random.choice(self.departmentTypeChoice)]
 
-        for i in range(self.row//self.n_employee):
+        for _ in range(self.row//self.n_employee):
             for id in range(self.n_employee):
                 _edata = employee_dict[id]
                 self.employeeID += [id]
