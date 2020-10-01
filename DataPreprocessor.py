@@ -1,10 +1,12 @@
 # from cassandra.cluster import Cluster
 from timeParser import timeParser
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 import numpy as np
+import random
 # for testing
 import csv
+from sklearn.feature_extraction import DictVectorizer
 
 
 class DataPreprocessor:
@@ -15,50 +17,68 @@ class DataPreprocessor:
                   "15:30", "16:00", "16:30",
                   "17:00", "17:30", "18:00",
                   "18:30", "19:00", "19:30", '20:00']
+    timeencodeDict = {"8:00": 0, "8:30": 1, "9:00": 2,
+                      "9:30": 3, "10:00": 4, "10:30": 5, "11:00": 6,
+                      "11:30": 7, "12:00": 8, "12:30": 9, "13:00": 10,
+                      "13:30": 11, "14:00": 12, "14:30": 13, "15:00": 14,
+                      "15:30": 15, "16:00": 16, "16:30": 17,
+                      "17:00": 18, "17:30": 19, "18:00": 20,
+                      "18:30": 21, "19:00": 22, "19:30": 23, '20:00': 24}
+    dayencodeDict = {
+        'MON': 0, "TUE": 1, 'WED': 2, 'THU': 3, "FRI": 4
+    }
 
     def __init__(self):
-        self.dummy = 0
+        self.le_dict = {}
         # self.cluster = Cluster(['0.0.0.0'], port=9042)
         # self.session = self.cluster.connect(
         #     'employee', wait_for_all_pools=True)
         # self.session.execute('USE employee')
 
-    def getData(self, onehot=True):
+    def getData(self):
         self._countByGroup()
-        dayOfWeek = []
-        time = []
+        # dayOfWeek = []
+        # time = []
+        features = []
         count = []
 
         for r in self.group_count.keys():
             # print(r)
             sp = r.split('#')
-            dayOfWeek += [sp[0]]
-            time += [sp[1]]
+            dayrow = [0]*5
+            dayrow[self.dayencodeDict[sp[0]]] = 1
+            # dayOfWeek += dayrow
+            timeRow = [0]*25
+            timeRow[self.timeencodeDict[sp[1]]] = 1
+            # time += [sp[1]]
+            features.append(dayrow+timeRow)
             count += [self.group_count[r]]
 
-        variables = [dayOfWeek,
-                     time,
-                     count]
-        df = pd.DataFrame(variables).transpose()
-        df.columns = ["dayOfWeek", "time", "count"]
-        print(df.head())
-        if onehot:
-            # times_encoder = OneHotEncoder().fit(
-            #     df['time'].unique().reshape(-1, 1))
-            # print(df['time'])
-            # transformed_time = times_encoder.transform(
-            #     df['time'].to_numpy().reshape(-1, 1))
-            # print(transformed_time)
-            times_df = pd.get_dummies(df.time, prefix='time')
+        train_data = np.array(features)
+        target = np.array(count)
+        return (train_data, target)
 
-            # dayOfWeek_encoder = OneHotEncoder().fit(
-            #     df['dayOfWeek'].to_numpy().reshape(-1, 1))
-            # transformed_dayOfWeek = dayOfWeek_encoder.transform(
-            #     df['dayOfWeek'].to_numpy().reshape(-1, 1))
-            dayOfWeek_df = pd.get_dummies(df.dayOfWeek, prefix='dayOfWeek')
-            df = pd.concat([times_df, dayOfWeek_df, df], axis=1).drop(
-                ['dayOfWeek', 'time'], axis=1)
-        return df
+    def transform_test(self, dayOfWeek, time):
+        # going random if not valid input
+        try:
+            dayidx = self.dayencodeDict[dayOfWeek]
+        except KeyError:
+            dayidx = random.randint(0, 4)
+
+        try:
+            timeidx = self.timeencodeDict[time]
+        except KeyError:
+            timeidx = random.randint(0, 24)
+
+        dayrow = [0]*5
+        dayrow[dayidx] = 1
+
+        timeRow = [0]*25
+        timeRow[timeidx] = 1
+
+        test_data = dayrow+timeRow
+
+        return np.array(test_data).reshape(1, -1)
 
     def _countByGroup(self):
         self.group_count = {}
@@ -79,3 +99,31 @@ class DataPreprocessor:
                             self.group_count[key] = 1
                         else:
                             self.group_count[key] += 1
+
+    def oneHotEncode2(self, df, le_dict={}):
+        # don't work this way
+        if not le_dict:
+            columnsToEncode = list(df.select_dtypes(
+                include=['category', 'object']))
+            train = True
+        else:
+            columnsToEncode = le_dict.keys()
+            train = False
+
+        for feature in columnsToEncode:
+            if train:
+                le_dict[feature] = LabelEncoder()
+            try:
+                if train:
+                    df[feature] = le_dict[feature].fit_transform(df[feature])
+                else:
+                    df[feature] = le_dict[feature].transform(df[feature])
+
+                df = pd.concat([df,
+                                pd.get_dummies(df[feature]).rename(columns=lambda x: feature + '_' + str(x))], axis=1)
+                df = df.drop(feature, axis=1)
+            except:
+                print('Error encoding '+feature)
+                #df[feature]  = df[feature].convert_objects(convert_numeric='force')
+                df[feature] = df[feature].apply(pd.to_numeric, errors='coerce')
+        return (df, le_dict)
